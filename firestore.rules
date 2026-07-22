@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Vrai uniquement si l'utilisateur connecté possède un document
+    // dans la collection `admins`, dont l'ID est son UID Firebase Auth.
+    function isAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Collection admins : chaque admin peut lire son propre statut,
+    // personne ne peut s'y ajouter depuis le client (uniquement
+    // depuis la console Firebase ou le SDK Admin côté serveur).
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Questions : lecture publique nécessaire pour charger le quiz,
+    // mais seule une personne authentifiée en tant qu'admin peut
+    // créer, modifier ou supprimer des questions.
+    match /questions/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Scores : lecture publique pour le classement / les champions.
+    // La création est ouverte (un joueur n'est pas connecté) mais on
+    // valide la forme et des bornes raisonnables pour empêcher un score
+    // fabriqué à la main dans la console du navigateur. Modifier ou
+    // supprimer un score existant reste réservé à l'admin.
+    match /scores/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(
+                        ['name','score','xp','level','correct','wrong','date']
+                      )
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 60
+                    && request.resource.data.score is int
+                    && request.resource.data.score >= 0
+                    && request.resource.data.score <= 5000
+                    && request.resource.data.xp is int
+                    && request.resource.data.xp >= 0
+                    && request.resource.data.xp <= 10000;
+      allow update, delete: if isAdmin();
+    }
+  }
+}

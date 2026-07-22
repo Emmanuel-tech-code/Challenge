@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YTH TECH CHALLENGE</title>
+
+  <!-- Firebase Compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
+  <!-- QR Code -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- jsPDF + html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ======================== PAGE : LOGIN ======================== -->
+  <section id="page-login" class="page active">
+    <div class="login-container">
+      <div id="logo-wrap" onclick="handleLogoClick()">
+        <img id="logo-img" src="logo.jpg" alt="YTH" onerror="this.onerror=null;this.style.display='none';document.getElementById('logo-text').style.display='flex'">
+        <div id="logo-text">YTH</div>
+      </div>
+      <h1 class="title-gradient">YTH TECH CHALLENGE</h1>
+      <p class="subtitle">ES-TU PRÊT À RELEVER LE DÉFI ?</p>
+
+      <div class="form-group">
+        <label>TON NOM</label>
+        <input type="text" id="player-name" placeholder="Ex: Kwame..." maxlength="40">
+      </div>
+      <button class="btn-primary" onclick="loginSubmit()">COMMENCER</button>
+      <p id="login-error" class="error-msg"></p>
+    </div>
+  </section>
+
+  <!-- ======================== PAGE : CATÉGORIES ======================== -->
+  <section id="page-categories" class="page">
+    <div class="page-header">
+      <p id="welcome-msg" class="subtitle"></p>
+      <h2>CHOISIS TES CATÉGORIES</h2>
+      <p class="hint">Sélectionne au moins 2 catégories · 15 questions au total</p>
+    </div>
+    <div id="categories-grid" class="categories-grid"></div>
+    <div class="center-actions">
+      <button class="btn-primary" onclick="startGame()" id="btn-play" disabled>JOUER</button>
+    </div>
+  </section>
+
+  <!-- ======================== PAGE : JEU ======================== -->
+  <section id="page-game" class="page">
+    <!-- Top bar -->
+    <div class="game-topbar">
+      <div class="lives" id="lives-display"></div>
+      <div class="score-display">
+        <span id="q-counter">Q 1/15</span>
+        <span id="score-display">Score : 0</span>
+        <span id="xp-display">XP : 0</span>
+      </div>
+      <div id="combo-display" class="combo hidden"></div>
+    </div>
+
+    <!-- Timer -->
+    <div class="timer-wrap">
+      <svg class="timer-svg" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="54" stroke="#1e1e3e" stroke-width="8" fill="none"/>
+        <circle id="timer-ring" cx="60" cy="60" r="54" stroke="#7c3aed" stroke-width="8" fill="none"
+          stroke-dasharray="339.292" stroke-dashoffset="0" stroke-linecap="round"
+          transform="rotate(-90 60 60)" style="transition: stroke-dashoffset 0.9s linear"/>
+      </svg>
+      <span id="timer-text">15</span>
+    </div>
+
+    <!-- Question -->
+    <div id="question-card" class="question-card">
+      <p id="question-category-label" class="q-cat-label"></p>
+      <img id="question-image" class="q-image hidden" alt="">
+      <h2 id="question-text"></h2>
+    </div>
+
+    <!-- Options -->
+    <div id="options-grid" class="options-grid"></div>
+
+    <!-- Jokers -->
+    <div class="jokers-bar">
+      <button id="joker-half" class="joker-btn" onclick="useJoker('half')" title="50/50 – Élimine 2 mauvaises réponses">
+        <span class="joker-icon">½</span><span class="joker-label">50/50</span>
+      </button>
+      <button id="joker-time" class="joker-btn" onclick="useJoker('time')" title="+10 secondes">
+        <span class="joker-icon">+10s</span><span class="joker-label">Temps</span>
+      </button>
+      <button id="joker-skip" class="joker-btn" onclick="useJoker('skip')" title="Passer cette question">
+        <span class="joker-icon">&#8680;</span><span class="joker-label">Passer</span>
+      </button>
+    </div>
+
+    <!-- Feedback overlay -->
+    <div id="feedback-overlay" class="feedback-overlay hidden">
+      <div id="feedback-box" class="feedback-box">
+        <div id="feedback-icon"></div>
+        <p id="feedback-msg"></p>
+        <p id="feedback-expl" class="feedback-expl"></p>
+        <button class="btn-primary" onclick="nextQuestion()">SUIVANT</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================== PAGE : RÉSULTATS ======================== -->
+  <section id="page-results" class="page">
+    <div class="results-container">
+      <div id="results-level-banner" class="level-banner"></div>
+      <h2>RÉSULTATS FINAUX</h2>
+      <div class="results-stats">
+        <div class="stat-card"><div class="stat-val" id="res-score">0</div><div class="stat-lbl">Score</div></div>
+        <div class="stat-card"><div class="stat-val" id="res-xp">0 XP</div><div class="stat-lbl">XP Total</div></div>
+        <div class="stat-card"><div class="stat-val" id="res-correct">0</div><div class="stat-lbl">Bonnes réponses</div></div>
+        <div class="stat-card"><div class="stat-val" id="res-wrong">0</div><div class="stat-lbl">Mauvaises réponses</div></div>
+      </div>
+      <div id="results-badges" class="badges-row"></div>
+      <div id="save-status" class="save-status"></div>
+      <div class="results-actions">
+        <button class="btn-primary" onclick="showPage('page-certificate')">MON CERTIFICAT</button>
+        <button class="btn-secondary" onclick="loadLeaderboard()">CLASSEMENT</button>
+        <button class="btn-ghost" onclick="showPage('page-login')">REJOUER</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================== PAGE : CERTIFICAT ======================== -->
+  <section id="page-certificate" class="page">
+    <div class="cert-actions no-print">
+      <button class="btn-primary" onclick="downloadPDF()">Télécharger PDF</button>
+      <button class="btn-secondary" onclick="window.print()">Imprimer</button>
+      <button class="btn-ghost" onclick="showPage('page-results')">Retour</button>
+    </div>
+
+    <div id="certificate-card" class="certificate-card">
+      <div class="cert-border">
+        <div class="cert-header">
+          <img id="cert-logo" src="logo.jpg" alt="YTH" onerror="this.style.display='none'">
+          <div class="cert-org">Youth Technology House</div>
+          <h1 class="cert-title">Certificat de Participation</h1>
+          <h2 class="cert-event">YTH TECH CHALLENGE</h2>
+        </div>
+
+        <div class="cert-body">
+          <p class="cert-intro">Ce certificat est décerné à</p>
+          <h2 id="cert-name" class="cert-player-name"></h2>
+          <div class="cert-stats-row">
+            <div class="cert-stat"><div id="cert-score" class="cert-stat-val"></div><div>Score</div></div>
+            <div class="cert-stat"><div id="cert-xp" class="cert-stat-val"></div><div>XP</div></div>
+            <div class="cert-stat"><div id="cert-level" class="cert-stat-val cert-level-val"></div><div>Niveau</div></div>
+          </div>
+          <div id="cert-badges" class="cert-badges-row"></div>
+          <div id="cert-categories" class="cert-categories"></div>
+        </div>
+
+        <div class="cert-footer">
+          <div class="cert-left">
+            <div id="cert-qr"></div>
+            <p class="cert-qr-label">Scan pour vérifier</p>
+          </div>
+          <div class="cert-right">
+            <p id="cert-date"></p>
+            <div class="cert-signature">
+              <div class="sig-line"></div>
+              <p>Youth Technology House</p>
+              <p class="sig-subtitle">Direction EdTech · Togo</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================== PAGE : CLASSEMENT ======================== -->
+  <section id="page-leaderboard" class="page">
+    <div class="lb-header">
+      <h2>CLASSEMENT GÉNÉRAL</h2>
+      <p class="subtitle">Top 20 meilleurs joueurs</p>
+    </div>
+    <div id="leaderboard-table" class="lb-table-wrap"></div>
+    <div class="center-actions">
+      <button class="btn-secondary" onclick="loadChampions()">CHAMPIONS PAR CATÉGORIE</button>
+      <button class="btn-ghost" onclick="showPage('page-results')">Retour</button>
+    </div>
+  </section>
+
+  <!-- ======================== PAGE : CHAMPIONS ======================== -->
+  <section id="page-champions" class="page">
+    <div class="lb-header">
+      <h2>HALL OF CHAMPIONS</h2>
+      <p class="subtitle">Les meilleurs par catégorie</p>
+    </div>
+    <div id="champions-grid" class="champions-grid"></div>
+    <div class="center-actions">
+      <button class="btn-ghost" onclick="showPage('page-leaderboard')">Classement général</button>
+    </div>
+  </section>
+
+  <!-- ======================== PAGE : ADMIN ======================== -->
+  <section id="page-admin" class="page">
+    <div class="admin-header">
+      <h2>PANNEAU ADMIN</h2>
+      <button class="btn-ghost small" id="btn-admin-logout" onclick="adminLogout()">Déconnexion</button>
+    </div>
+
+    <div id="admin-auth-wall" class="admin-auth-wall">
+      <p>Connexion administrateur :</p>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="admin-email" placeholder="admin@ythtechhouse.org" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" id="admin-password" placeholder="Mot de passe" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" id="btn-admin-login" onclick="adminLogin()">SE CONNECTER</button>
+      <p id="admin-auth-error" class="error-msg"></p>
+    </div>
+
+    <div id="admin-panel" class="admin-panel hidden">
+      <!-- Tabs -->
+      <div class="admin-tabs">
+        <button class="admin-tab active" onclick="switchTab('tab-list')">Questions</button>
+        <button class="admin-tab" onclick="switchTab('tab-add')">Ajouter</button>
+        <button class="admin-tab" onclick="switchTab('tab-import')">Import / Export</button>
+      </div>
+
+      <!-- Tab: List -->
+      <div id="tab-list" class="admin-tab-content">
+        <div class="admin-toolbar">
+          <input type="text" id="admin-search" placeholder="Rechercher..." oninput="filterAdminQuestions()">
+          <select id="admin-filter-cat" onchange="filterAdminQuestions()">
+            <option value="">Toutes les catégories</option>
+          </select>
+        </div>
+        <div id="admin-questions-list" class="admin-list"></div>
+      </div>
+
+      <!-- Tab: Add / Edit -->
+      <div id="tab-add" class="admin-tab-content hidden">
+        <h3 id="form-title">Ajouter une question</h3>
+        <input type="hidden" id="edit-id">
+        <div class="admin-form">
+          <label>Question</label>
+          <textarea id="f-question" rows="3" placeholder="Texte de la question..."></textarea>
+
+          <label>Option A</label><input type="text" id="f-opt-a" placeholder="Option A">
+          <label>Option B</label><input type="text" id="f-opt-b" placeholder="Option B">
+          <label>Option C</label><input type="text" id="f-opt-c" placeholder="Option C">
+          <label>Option D</label><input type="text" id="f-opt-d" placeholder="Option D">
+
+          <label>Bonne réponse</label>
+          <select id="f-answer">
+            <option value="">-- Sélectionner --</option>
+            <option value="A">Option A</option>
+            <option value="B">Option B</option>
+            <option value="C">Option C</option>
+            <option value="D">Option D</option>
+          </select>
+
+          <label>Catégorie</label>
+          <select id="f-category">
+            <option value="">-- Sélectionner --</option>
+            <option>Informatique &amp; Numérique</option>
+            <option>Robotique &amp; Électronique</option>
+            <option>Calcul Mental</option>
+            <option>Histoire &amp; Géographie</option>
+            <option>Quiz Togo</option>
+            <option>Culture Générale</option>
+          </select>
+
+          <label>Difficulté</label>
+          <select id="f-difficulty">
+            <option value="facile">Facile</option>
+            <option value="moyen">Moyen</option>
+            <option value="difficile">Difficile</option>
+          </select>
+
+          <label>Explication (affichée après réponse)</label>
+          <textarea id="f-explanation" rows="2" placeholder="Explication de la bonne réponse..."></textarea>
+
+          <label>Image URL (optionnel)</label>
+          <input type="url" id="f-image" placeholder="https://...">
+
+          <div class="admin-toggle-row">
+            <label>Active</label>
+            <input type="checkbox" id="f-active" checked>
+          </div>
+
+          <div class="admin-form-actions">
+            <button class="btn-primary" onclick="saveQuestion()">ENREGISTRER</button>
+            <button class="btn-ghost" onclick="resetForm()">Annuler</button>
+          </div>
+          <p id="form-status" class="save-status"></p>
+        </div>
+      </div>
+
+      <!-- Tab: Import / Export -->
+      <div id="tab-import" class="admin-tab-content hidden">
+        <h3>Importer des questions (JSON)</h3>
+        <p class="hint">Format : tableau d'objets avec les champs <code>question, options[], answer, category, difficulty, explanation, image, active</code></p>
+        <textarea id="import-json" rows="10" placeholder='[{"question":"...", "options":["A","B","C","D"], "answer":"A", "category":"Calcul Mental", "difficulty":"facile", "explanation":"...", "active":true}]'></textarea>
+        <button class="btn-primary" onclick="importQuestions()">IMPORTER</button>
+        <p id="import-status" class="save-status"></p>
+
+        <hr class="divider">
+
+        <h3>Exporter toutes les questions</h3>
+        <button class="btn-secondary" onclick="exportQuestions()">TÉLÉCHARGER JSON</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Edit modal -->
+  <div id="edit-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <p id="modal-msg"></p>
+      <button class="btn-ghost" onclick="closeModal()">Fermer</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
